@@ -2,7 +2,7 @@
 基于 **Node.js + Express + SSE** 开发的轻量级 Linux 服务器实时监控系统，通过 Server-Sent Events（SSE）技术实现毫秒级数据推送，无需前端轮询，低资源占用、高实时性。
 
 # 语言选择
-[简体中文](README.md) | [繁體中文](docs/README.zh-TW.md) | [English](docs/README.en.md)
+[简体中文](README.md) | [繁體中文](./docs/README.zh-TW.md) | [English](./docs/README.en.md)
 
 ## 作者的话
 这是我研究 SSE 时随手折腾出来的一个小玩意儿。
