@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>SSE 实时监控</title>
+  <!-- 引入 Font Awesome 图标库 -->
+  <link rel="stylesheet" type="text/css" href="fontawesome-free-7.2.0-web/css/all.min.css">
   <style>
     /* 全局样式重置：消除默认边距、内边距，统一盒模型 */
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
@@ -81,23 +83,23 @@
 <body>
   <!-- 页面主容器 -->
   <div class="container">
-    <h1>SSE 实时系统监控</h1>
+    <h1><i class="fa-solid fa-chart-line"></i> SSE 实时系统监控</h1>
 
     <!-- 后端系统时间展示模块 -->
     <div class="time-box">
-      <div class="label">📡 后端系统时间</div>
+      <div class="label"><i class="fa-solid fa-satellite-dish"></i> 后端系统时间</div>
       <div id="serverTime" class="time">-</div>
     </div>
 
     <!-- 前端本地时间展示模块 -->
     <div class="time-box">
-      <div class="label">💻 前端本地时间</div>
+      <div class="label"><i class="fa-solid fa-laptop"></i> 前端本地时间</div>
       <div id="clientTime" class="time">-</div>
     </div>
 
     <!-- 网络连接延迟展示模块 -->
     <div class="time-box">
-      <div class="label">⏱️ 连接延迟</div>
+      <div class="label"><i class="fa-solid fa-stopwatch"></i> 连接延迟</div>
       <div id="delay" class="delay">-</div>
     </div>
 
@@ -105,7 +107,7 @@
     <div class="stats-grid">
       <!-- CPU 监控卡片 -->
       <div class="stat-card">
-        <div class="stat-title">🖥 CPU 使用率</div>
+        <div class="stat-title"><i class="fa-solid fa-microchip"></i> CPU 使用率</div>
         <div id="cpuUsage" class="stat-value">-</div>
         <div id="cpuLoad" class="stat-sub">负载：-</div>
         <div id="cpuCores" class="stat-sub">-</div>
@@ -113,41 +115,41 @@
 
       <!-- 内存监控卡片 -->
       <div class="stat-card">
-        <div class="stat-title">🧠 内存使用率</div>
+        <div class="stat-title"><i class="fa-solid fa-memory"></i> 内存使用率</div>
         <div id="memUsage" class="stat-value">-</div>
         <div id="memInfo" class="stat-sub">-</div>
       </div>
 
       <!-- 磁盘监控卡片 -->
       <div class="stat-card">
-        <div class="stat-title">💽 磁盘使用率</div>
+        <div class="stat-title"><i class="fa-solid fa-hard-drive"></i> 磁盘使用率</div>
         <div id="diskUsage" class="stat-value">-</div>
         <div id="diskMount" class="stat-sub">-</div>
       </div>
 
       <!-- Swap 分区监控卡片 -->
       <div class="stat-card">
-        <div class="stat-title">🔁 Swap 使用</div>
+        <div class="stat-title"><i class="fa-solid fa-arrows-rotate"></i> Swap 使用</div>
         <div id="swapUsage" class="stat-value">-</div>
         <div id="swapInfo" class="stat-sub">-</div>
       </div>
 
       <!-- 实时网速监控卡片 -->
       <div class="stat-card">
-        <div class="stat-title">🌐 实时网速</div>
+        <div class="stat-title"><i class="fa-solid fa-globe"></i> 实时网速</div>
         <div id="netUsage" class="stat-value">-</div>
         <div id="netIface" class="stat-sub">-</div>
       </div>
 
       <!-- 累计流量监控卡片 -->
       <div class="stat-card">
-        <div class="stat-title">📶 累计总流量</div>
+        <div class="stat-title"><i class="fa-solid fa-wifi"></i> 累计总流量</div>
         <div id="totalTraffic" class="stat-value">-</div>
       </div>
 
       <!-- 系统信息卡片 -->
       <div class="stat-card">
-        <div class="stat-title">📌 系统信息</div>
+        <div class="stat-title"><i class="fa-solid fa-info-circle"></i> 系统信息</div>
         <div id="sysInfo" class="stat-value">-</div>
         <div id="sysExtra" class="stat-sub">-</div>
       </div>
@@ -155,7 +157,7 @@
     </div>
 
     <!-- SSE 连接状态展示 -->
-    <div id="status" class="status disconnected">等待连接...</div>
+    <div id="status" class="status disconnected"><i class="fa-solid fa-hourglass-half"></i> 等待连接...</div>
   </div>
 
 <script>
@@ -222,7 +224,7 @@
     
     // 连接成功时触发
     sse.onopen = () => {
-      statusEl.textContent = '✅ SSE 已连接';
+      statusEl.innerHTML = '<i class="fa-solid fa-check"></i> SSE 已连接';
       statusEl.className = 'status connected';
     };
     
@@ -240,7 +242,7 @@
     
     // 连接出错/断开时触发，自动重连
     sse.onerror = () => {
-      statusEl.textContent = '❌ SSE 断开，重连中...';
+      statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> SSE 断开，重连中...';
       statusEl.className = 'status disconnected';
       sse.close();
       setTimeout(connectSSE, 2000);
