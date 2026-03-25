@@ -4,42 +4,71 @@
   <meta charset="UTF-8">
   <title>SSE 实时监控</title>
   <style>
+    /* 全局样式重置：消除默认边距、内边距，统一盒模型 */
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+    
+    /* 页面整体背景与内边距 */
     body { padding: 40px; background: #f5f5f5; }
+    
+    /* 主容器：居中、白色背景、圆角、阴影 */
     .container { max-width: 700px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    
+    /* 标题居中 */
     h1 { text-align: center; margin-bottom: 30px; color: #333; }
 
+    /* 时间展示框样式 */
     .time-box {
       margin: 20px 0; padding: 15px; border-radius: 8px; background: #f8f9fa;
     }
+    
+    /* 标签文字样式（灰色小字） */
     .label { font-size: 14px; color: #666; margin-bottom: 8px; }
+    
+    /* 时间数值样式（大号加粗） */
     .time { font-size: 22px; font-weight: bold; color: #222; }
+    
+    /* 延迟数值样式（红色加粗） */
     .delay { font-size: 18px; color: #d32f2f; font-weight: bold; }
+    
+    /* 连接状态条样式 */
     .status { margin-top: 20px; padding: 10px; border-radius: 6px; text-align: center; }
+    
+    /* 已连接状态：绿色背景 */
     .connected { background: #e8f5e9; color: #2e7d32; }
+    
+    /* 断开状态：红色背景 */
     .disconnected { background: #ffebee; color: #c62828; }
 
+    /* 监控卡片网格布局：2列、间距12px */
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 12px;
       margin: 24px 0;
     }
+    
+    /* 单个监控卡片样式 */
     .stat-card {
       background: #f8f9fa;
       padding: 16px;
       border-radius: 10px;
     }
+    
+    /* 卡片标题：小灰色文字 */
     .stat-title {
       font-size: 13px;
       color: #666;
       margin-bottom: 6px;
     }
+    
+    /* 卡片数值：大号加粗 */
     .stat-value {
       font-size: 20px;
       font-weight: bold;
       color: #222;
     }
+    
+    /* 卡片子信息：小号文字、支持换行 */
     .stat-sub {
       font-size: 12px;
       color: #555;
@@ -50,23 +79,31 @@
   </style>
 </head>
 <body>
+  <!-- 页面主容器 -->
   <div class="container">
     <h1>SSE 实时系统监控</h1>
 
+    <!-- 后端系统时间展示模块 -->
     <div class="time-box">
       <div class="label">📡 后端系统时间</div>
       <div id="serverTime" class="time">-</div>
     </div>
+
+    <!-- 前端本地时间展示模块 -->
     <div class="time-box">
       <div class="label">💻 前端本地时间</div>
       <div id="clientTime" class="time">-</div>
     </div>
+
+    <!-- 网络连接延迟展示模块 -->
     <div class="time-box">
       <div class="label">⏱️ 连接延迟</div>
       <div id="delay" class="delay">-</div>
     </div>
 
+    <!-- 监控数据网格布局 -->
     <div class="stats-grid">
+      <!-- CPU 监控卡片 -->
       <div class="stat-card">
         <div class="stat-title">🖥 CPU 使用率</div>
         <div id="cpuUsage" class="stat-value">-</div>
@@ -74,35 +111,41 @@
         <div id="cpuCores" class="stat-sub">-</div>
       </div>
 
+      <!-- 内存监控卡片 -->
       <div class="stat-card">
         <div class="stat-title">🧠 内存使用率</div>
         <div id="memUsage" class="stat-value">-</div>
         <div id="memInfo" class="stat-sub">-</div>
       </div>
 
+      <!-- 磁盘监控卡片 -->
       <div class="stat-card">
         <div class="stat-title">💽 磁盘使用率</div>
         <div id="diskUsage" class="stat-value">-</div>
         <div id="diskMount" class="stat-sub">-</div>
       </div>
 
+      <!-- Swap 分区监控卡片 -->
       <div class="stat-card">
         <div class="stat-title">🔁 Swap 使用</div>
         <div id="swapUsage" class="stat-value">-</div>
         <div id="swapInfo" class="stat-sub">-</div>
       </div>
 
+      <!-- 实时网速监控卡片 -->
       <div class="stat-card">
         <div class="stat-title">🌐 实时网速</div>
         <div id="netUsage" class="stat-value">-</div>
         <div id="netIface" class="stat-sub">-</div>
       </div>
 
+      <!-- 累计流量监控卡片 -->
       <div class="stat-card">
         <div class="stat-title">📶 累计总流量</div>
         <div id="totalTraffic" class="stat-value">-</div>
       </div>
 
+      <!-- 系统信息卡片 -->
       <div class="stat-card">
         <div class="stat-title">📌 系统信息</div>
         <div id="sysInfo" class="stat-value">-</div>
@@ -111,36 +154,39 @@
 
     </div>
 
+    <!-- SSE 连接状态展示 -->
     <div id="status" class="status disconnected">等待连接...</div>
   </div>
 
 <script>
-  const serverTimeEl = document.getElementById('serverTime');
-  const clientTimeEl = document.getElementById('clientTime');
-  const delayEl = document.getElementById('delay');
-  const statusEl = document.getElementById('status');
+  // 获取页面所有需要操作的 DOM 元素
+  const serverTimeEl = document.getElementById('serverTime');    // 后端时间
+  const clientTimeEl = document.getElementById('clientTime');    // 本地时间
+  const delayEl = document.getElementById('delay');              // 网络延迟
+  const statusEl = document.getElementById('status');            // 连接状态
 
-  const cpuUsageEl = document.getElementById('cpuUsage');
-  const cpuLoadEl = document.getElementById('cpuLoad');
-  const cpuCoresEl = document.getElementById('cpuCores');
+  const cpuUsageEl = document.getElementById('cpuUsage');        // CPU 使用率
+  const cpuLoadEl = document.getElementById('cpuLoad');          // CPU 负载
+  const cpuCoresEl = document.getElementById('cpuCores');        // CPU 核心数
 
-  const memUsageEl = document.getElementById('memUsage');
-  const memInfoEl = document.getElementById('memInfo');
+  const memUsageEl = document.getElementById('memUsage');        // 内存使用率
+  const memInfoEl = document.getElementById('memInfo');          // 内存总量/已用
 
-  const swapUsageEl = document.getElementById('swapUsage');
-  const swapInfoEl = document.getElementById('swapInfo');
+  const swapUsageEl = document.getElementById('swapUsage');      // Swap 使用率
+  const swapInfoEl = document.getElementById('swapInfo');        // Swap 总量/已用
 
-  const diskUsageEl = document.getElementById('diskUsage');
-  const diskMountEl = document.getElementById('diskMount');
+  const diskUsageEl = document.getElementById('diskUsage');      // 磁盘使用率
+  const diskMountEl = document.getElementById('diskMount');      // 磁盘挂载点
 
-  const netUsageEl = document.getElementById('netUsage');
-  const netIfaceEl = document.getElementById('netIface');
-  const totalTrafficEl = document.getElementById('totalTraffic');
+  const netUsageEl = document.getElementById('netUsage');        // 实时网速
+  const netIfaceEl = document.getElementById('netIface');        // 网卡名称
+  const totalTrafficEl = document.getElementById('totalTraffic');// 总流量
 
-  const sysInfoEl = document.getElementById('sysInfo');
-  const sysExtraEl = document.getElementById('sysExtra');
+  const sysInfoEl = document.getElementById('sysInfo');          // 主机名
+  const sysExtraEl = document.getElementById('sysExtra');        // 系统详细信息
 
-  // 更新本地时间
+  // 功能1：实时更新前端本地时间
+  // 每隔 100ms 刷新一次
   function updateClientTime() {
     const now = new Date();
     clientTimeEl.textContent = now.toLocaleString('zh-CN', {
@@ -151,7 +197,8 @@
   setInterval(updateClientTime, 100);
   updateClientTime();
 
-  // Ping 延迟
+  // 功能2：Ping 测试 - 计算服务器延迟
+  // 每隔 500ms 发送一次请求，计算耗时
   async function pingServer() {
     try {
       const start = Date.now();
@@ -168,13 +215,18 @@
   setInterval(pingServer, 500);
   pingServer();
 
-  // SSE 时间
+  // 功能3：SSE 连接 - 接收后端实时时间
+  // 建立长连接，接收服务器推送的时间
   function connectSSE() {
     const sse = new EventSource('/sse/time');
+    
+    // 连接成功时触发
     sse.onopen = () => {
       statusEl.textContent = '✅ SSE 已连接';
       statusEl.className = 'status connected';
     };
+    
+    // 接收到后端推送的时间时触发
     sse.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
@@ -185,6 +237,8 @@
         });
       } catch (err) {}
     };
+    
+    // 连接出错/断开时触发，自动重连
     sse.onerror = () => {
       statusEl.textContent = '❌ SSE 断开，重连中...';
       statusEl.className = 'status disconnected';
@@ -194,32 +248,35 @@
   }
   connectSSE();
 
-  // SSE 系统监控
+  // 功能4：SSE 连接 - 接收系统监控数据
+  // 接收 CPU/内存/磁盘/网络/系统信息等实时数据
   function connectSystemSSE() {
     const sse = new EventSource('/sse/system');
+    
+    // 接收到系统监控数据时更新页面
     sse.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
 
-        // === CPU 完整信息 ===
+        // === CPU 信息展示 ===
         cpuUsageEl.textContent = `${data.cpu.usage}%`;
         cpuLoadEl.textContent = `负载：${data.cpu.load_1m} / ${data.cpu.load_5m} / ${data.cpu.load_15m}`;
         cpuCoresEl.textContent = `核心数：${data.cpu.cores}`;
 
-        // === 内存 ===
+        // === 内存信息展示 ===
         memUsageEl.textContent = `${data.memory.usage_percent}%`;
         memInfoEl.textContent = `${data.memory.used_gb}G / ${data.memory.total_gb}G`;
 
-        // === Swap ===
+        // === Swap 信息展示 ===
         swapUsageEl.textContent = `${data.memory.swap_percent}%`;
         swapInfoEl.textContent = `${data.memory.swap_used_gb}G / ${data.memory.swap_total_gb}G`;
 
-        // === 磁盘 ===
+        // === 磁盘信息展示 ===
         const disk = data.disk[0] || {};
         diskUsageEl.textContent = disk.pcent || '0%';
         diskMountEl.textContent = disk.mount || '-';
 
-        // === 网络 ===
+        // === 网络速度展示 ===
         const net = data.network[0] || {};
         let rxStr = '0 B/s';
         let txStr = '0 B/s';
@@ -238,11 +295,12 @@
         netUsageEl.textContent = `↓ ${rxStr} • ↑ ${txStr}`;
         netIfaceEl.textContent = net.interface || '-';
 
+        // === 累计流量展示 ===
         const rxTotalGB = (net.rx_bytes / 1024 / 1024 / 1024).toFixed(2);
         const txTotalGB = (net.tx_bytes / 1024 / 1024 / 1024).toFixed(2);
         totalTrafficEl.textContent = `↓ ${rxTotalGB}G • ↑ ${txTotalGB}G`;
 
-        // === 系统信息：按你要求分行显示 ===
+        // === 系统信息展示 ===
         sysInfoEl.textContent = data.system.hostname;
         sysExtraEl.textContent =
 `${data.os_release} | ${data.system.arch}
