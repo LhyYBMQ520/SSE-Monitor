@@ -3,7 +3,7 @@
 A lightweight real-time monitoring system for Linux servers built with **Node.js + Express + SSE**. It delivers millisecond-level data pushes via Server-Sent Events (SSE), with no frontend polling required, low resource usage, and high real-time performance.
 
 # Language Selection
-[简体中文](../readme.md) | [繁體中文](readme.zh-TW.md) | [English](readme.en.md)
+[简体中文](../README.md) | [繁體中文](README.zh-TW.md) | [English](README.en.md)
 
 ## From the Author
 This is a little project I made while experimenting with SSE.
