@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>SSE 实时监控</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { padding: 40px; background: #f5f5f5; }
+    .container { max-width: 700px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    h1 { text-align: center; margin-bottom: 30px; color: #333; }
+
+    .time-box {
+      margin: 20px 0; padding: 15px; border-radius: 8px; background: #f8f9fa;
+    }
+    .label { font-size: 14px; color: #666; margin-bottom: 8px; }
+    .time { font-size: 22px; font-weight: bold; color: #222; }
+    .delay { font-size: 18px; color: #d32f2f; font-weight: bold; }
+    .status { margin-top: 20px; padding: 10px; border-radius: 6px; text-align: center; }
+    .connected { background: #e8f5e9; color: #2e7d32; }
+    .disconnected { background: #ffebee; color: #c62828; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin: 24px 0;
+    }
+    .stat-card {
+      background: #f8f9fa;
+      padding: 16px;
+      border-radius: 10px;
+    }
+    .stat-title {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-size: 20px;
+      font-weight: bold;
+      color: #222;
+    }
+    .stat-sub {
+      font-size: 12px;
+      color: #555;
+      margin-top: 4px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>SSE 实时系统监控</h1>
+
+    <div class="time-box">
+      <div class="label">📡 后端系统时间</div>
+      <div id="serverTime" class="time">-</div>
+    </div>
+    <div class="time-box">
+      <div class="label">💻 前端本地时间</div>
+      <div id="clientTime" class="time">-</div>
+    </div>
+    <div class="time-box">
+      <div class="label">⏱️ 连接延迟</div>
+      <div id="delay" class="delay">-</div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-title">🖥 CPU 使用率</div>
+        <div id="cpuUsage" class="stat-value">-</div>
+        <div id="cpuLoad" class="stat-sub">负载：-</div>
+        <div id="cpuCores" class="stat-sub">-</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-title">🧠 内存使用率</div>
+        <div id="memUsage" class="stat-value">-</div>
+        <div id="memInfo" class="stat-sub">-</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-title">💽 磁盘使用率</div>
+        <div id="diskUsage" class="stat-value">-</div>
+        <div id="diskMount" class="stat-sub">-</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-title">🔁 Swap 使用</div>
+        <div id="swapUsage" class="stat-value">-</div>
+        <div id="swapInfo" class="stat-sub">-</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-title">🌐 实时网速</div>
+        <div id="netUsage" class="stat-value">-</div>
+        <div id="netIface" class="stat-sub">-</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-title">📶 累计总流量</div>
+        <div id="totalTraffic" class="stat-value">-</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-title">📌 系统信息</div>
+        <div id="sysInfo" class="stat-value">-</div>
+        <div id="sysExtra" class="stat-sub">-</div>
+      </div>
+
+    </div>
+
+    <div id="status" class="status disconnected">等待连接...</div>
+  </div>
+
+<script>
+  const serverTimeEl = document.getElementById('serverTime');
+  const clientTimeEl = document.getElementById('clientTime');
+  const delayEl = document.getElementById('delay');
+  const statusEl = document.getElementById('status');
+
+  const cpuUsageEl = document.getElementById('cpuUsage');
+  const cpuLoadEl = document.getElementById('cpuLoad');
+  const cpuCoresEl = document.getElementById('cpuCores');
+
+  const memUsageEl = document.getElementById('memUsage');
+  const memInfoEl = document.getElementById('memInfo');
+
+  const swapUsageEl = document.getElementById('swapUsage');
+  const swapInfoEl = document.getElementById('swapInfo');
+
+  const diskUsageEl = document.getElementById('diskUsage');
+  const diskMountEl = document.getElementById('diskMount');
+
+  const netUsageEl = document.getElementById('netUsage');
+  const netIfaceEl = document.getElementById('netIface');
+  const totalTrafficEl = document.getElementById('totalTraffic');
+
+  const sysInfoEl = document.getElementById('sysInfo');
+  const sysExtraEl = document.getElementById('sysExtra');
+
+  // 更新本地时间
+  function updateClientTime() {
+    const now = new Date();
+    clientTimeEl.textContent = now.toLocaleString('zh-CN', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    });
+  }
+  setInterval(updateClientTime, 100);
+  updateClientTime();
+
+  // Ping 延迟
+  async function pingServer() {
+    try {
+      const start = Date.now();
+      const res = await fetch('/api/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) throw new Error();
+      delayEl.textContent = `${Date.now() - start} ms`;
+    } catch (e) {
+      delayEl.textContent = '未连接';
+    }
+  }
+  setInterval(pingServer, 500);
+  pingServer();
+
+  // SSE 时间
+  function connectSSE() {
+    const sse = new EventSource('/sse/time');
+    sse.onopen = () => {
+      statusEl.textContent = '✅ SSE 已连接';
+      statusEl.className = 'status connected';
+    };
+    sse.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        const t = new Date(data.serverTime);
+        serverTimeEl.textContent = t.toLocaleString('zh-CN', {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+        });
+      } catch (err) {}
+    };
+    sse.onerror = () => {
+      statusEl.textContent = '❌ SSE 断开，重连中...';
+      statusEl.className = 'status disconnected';
+      sse.close();
+      setTimeout(connectSSE, 2000);
+    };
+  }
+  connectSSE();
+
+  // SSE 系统监控
+  function connectSystemSSE() {
+    const sse = new EventSource('/sse/system');
+    sse.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+
+        // === CPU 完整信息 ===
+        cpuUsageEl.textContent = `${data.cpu.usage}%`;
+        cpuLoadEl.textContent = `负载：${data.cpu.load_1m} / ${data.cpu.load_5m} / ${data.cpu.load_15m}`;
+        cpuCoresEl.textContent = `核心数：${data.cpu.cores}`;
+
+        // === 内存 ===
+        memUsageEl.textContent = `${data.memory.usage_percent}%`;
+        memInfoEl.textContent = `${data.memory.used_gb}G / ${data.memory.total_gb}G`;
+
+        // === Swap ===
+        swapUsageEl.textContent = `${data.memory.swap_percent}%`;
+        swapInfoEl.textContent = `${data.memory.swap_used_gb}G / ${data.memory.swap_total_gb}G`;
+
+        // === 磁盘 ===
+        const disk = data.disk[0] || {};
+        diskUsageEl.textContent = disk.pcent || '0%';
+        diskMountEl.textContent = disk.mount || '-';
+
+        // === 网络 ===
+        const net = data.network[0] || {};
+        let rxStr = '0 B/s';
+        let txStr = '0 B/s';
+        if (net.rx_speed !== undefined) {
+          rxStr = net.rx_speed > 1048576
+            ? (net.rx_speed / 1048576).toFixed(2) + ' MB/s'
+            : net.rx_speed > 1024
+              ? (net.rx_speed / 1024).toFixed(1) + ' KB/s'
+              : net.rx_speed + ' B/s';
+          txStr = net.tx_speed > 1048576
+            ? (net.tx_speed / 1048576).toFixed(2) + ' MB/s'
+            : net.tx_speed > 1024
+              ? (net.tx_speed / 1024).toFixed(1) + ' KB/s'
+              : net.tx_speed + ' B/s';
+        }
+        netUsageEl.textContent = `↓ ${rxStr} • ↑ ${txStr}`;
+        netIfaceEl.textContent = net.interface || '-';
+
+        const rxTotalGB = (net.rx_bytes / 1024 / 1024 / 1024).toFixed(2);
+        const txTotalGB = (net.tx_bytes / 1024 / 1024 / 1024).toFixed(2);
+        totalTrafficEl.textContent = `↓ ${rxTotalGB}G • ↑ ${txTotalGB}G`;
+
+        // === 系统信息：按你要求分行显示 ===
+        sysInfoEl.textContent = data.system.hostname;
+        sysExtraEl.textContent =
+`${data.os_release} | ${data.system.arch}
+内核：${data.system.kernel}
+运行：${data.system.uptime_human} | 进程：${data.process_count}`;
+
+      } catch (err) {}
+    };
+  }
+  connectSystemSSE();
+</script>
+</body>
+</html>
