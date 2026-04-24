@@ -1,112 +1,106 @@
 # SSE Real-Time System Monitor
-### (This article was translated using Doubao AI. Please be aware that AI may make mistakes.)
+### (This article was translated using AI. Please be aware that AI may make mistakes.)
 A lightweight real-time monitoring system for Linux servers built with **Node.js + Express + SSE**. It delivers millisecond-level data pushes via Server-Sent Events (SSE), with no frontend polling required, low resource usage, and high real-time performance.
 
 # Language Selection
 [简体中文](../README.md) | [繁體中文](README.zh-TW.md) | [English](README.en.md)
 
-## From the Author
-This is a little project I made while experimenting with SSE.
+## Author's Note
+This is a small side project I made while experimenting with SSE.
 
-In its earliest version, it only did three things: push server time to the frontend, display local time on the client, and test connection latency — all of which are still preserved today.
+Initially, the project only had three core features: server time push, local time display on the frontend, and connection latency testing — all of which are still fully retained today.
 
-As I worked on it, I realized: SSE long connections are *perfect* for pushing real-time server data to the browser.
-So what should I push? The performance metrics I love checking, of course!
+While developing, I suddenly realized that SSE long connections are inherently perfect for pushing real-time server data to the frontend. So what data should I push? Naturally, the system performance metrics I always keep an eye on!
 
-I often SSH into my VPS just to stare at `btop` and watch system stats. So I decided to build a tool that pushes those same btop-style metrics to a web dashboard — and this project was born.
+I often log into my VPS via SSH and just leave `btop` running to monitor system status. That inspired me to build a feature to deliver btop-style system monitoring metrics via push, and this project was born.
 
-The logic is really simple: read system info from native Linux interfaces, then push it to the frontend in real time via SSE. That’s it, haha 😂😂😂
+The overall logic is actually very straightforward: the backend automatically collects system information according to the operating system platform, then sends real-time data to the frontend through the SSE protocol for display. That’s all 😂😂😂
 
-Oh, and don’t be surprised by all the Chinese comments in the code — I had AI add them so I wouldn’t forget what everything does later.
+## ✨ Project Features
+- **Real-time Data Push**: SSE long connection based, delivering system data instantly
+- **Comprehensive Metrics**: Full coverage of CPU, Memory, Swap, Disk, Network and system information
+- **Low Resource Usage**: Built with pure native Node.js, no heavy dependencies, ultra-low server consumption
+- **Out-of-the-Box**: One-click startup without complicated configuration
+- **Visual Dashboard**: Clean and elegant web frontend to view all monitoring data in real time
+- **Stable & Reliable**: Complete exception handling, automatic reconnection after disconnection
 
-## ✨ Features
-- **Real-time data push**: SSE long connection with 500ms system metric updates
-- **Comprehensive monitoring**: Full coverage of CPU, RAM, Swap, disk, network, and system info
-- **Lightweight**: Pure native Node.js, no heavy dependencies, minimal server footprint
-- **Out-of-the-box**: One command to start, no complicated setup
-- **Clean web UI**: Simple, modern dashboard to view live stats
-- **Stable & robust**: Full error handling and automatic reconnection on disconnect
-
-## 📊 Monitored Metrics
-| Module | Details |
-|--------|---------|
-| **CPU** | Usage percentage, core count, 1/5/15-minute system load |
-| **Memory** | Total capacity, used/free, usage percentage |
-| **Swap** | Swap partition usage & percentage |
-| **Disk** | Mount point, usage percentage |
-| **Network** | Real-time upload/download speed, total traffic, network interface info |
+## 📊 Monitoring Metrics
+| Module | Monitoring Content |
+|--------|--------------------|
+| **CPU** | Usage, core count, 1/5/15-minute load average (fixed to 0 on Windows) |
+| **Memory** | Total capacity, used/free space, usage percentage |
+| **Swap** | Swap partition usage and utilization rate |
+| **Disk** | Mount points & disk usage |
+| **Network** | Real-time upload/download speed, total traffic, network adapter info |
 | **System** | Hostname, OS version, kernel version, uptime, process count |
-| **Network** | SSE connection status |
+| **Connection** | SSE connection status |
 
-## 🕒 Extra Features
-- **Dual clock display**: Live server time via SSE + local client time
-- **Real-time latency monitoring**: Automatic ping tests to show current server connection delay
+## 🕒 Extra Highlights
+- **Dual Clock Display**: SSE pushes server time in real time; shows both server time and local time accurately
+- **Real-time Latency Monitor**: Automatic ping test to display current server connection delay
 
 ## 🚀 Quick Start
 ### 1. Requirements
-- Linux system (depends on `/proc` filesystem, Linux only)
-- Node.js 22 (recommended; other versions untested)
+- Windows / Linux / Mac (Mac untested)
+- Node.js 22+ (recommended, lower versions not tested)
 
 ### 2. Install & Run
 ```bash
-# 1. Clone / download the project
+# 1. Clone the project
+git clone https://github.com/LhyYBMQ520/SSE-Monitor.git
 
 # 2. Install dependencies
 npm install
 
-# 3. Start the server
+# 3. Start the service
 npm start
 ```
 
-### 3. Access the Dashboard
-After starting, open in your browser:
+### 3. Access
+After startup, open your browser and visit:
 ```
-http://your-server-ip:23456
+IP:23456
 ```
+You will see the real-time monitoring dashboard.
 
-## 🔧 Core Technologies
+## 🔧 Core Technology
 ### 1. Server-Sent Events (SSE)
-- HTML5 standard for server-to-client real-time data streaming
-- Lighter than WebSocket, supports server→client one-way delivery only
-- Native reconnection behavior ideal for monitoring
+- An HTML5 technology that enables servers to actively push real-time data to clients
+- Lighter than WebSocket, with one-way transmission (server → client only)
+- Native disconnection and auto-reconnection, ideal for monitoring scenarios
 
-### 2. System Information Collection
-- Reads real-time data from Linux `/proc` virtual filesystem
-- CPU, memory, network, and process data from kernel interfaces for accuracy
-- Disk info parsed from `df -h`, compatible with major Linux distributions
+### 2. System Data Collection
+- Cross-platform system info collection powered by `systeminformation`
+- Auto-adapts to Windows / Linux / Mac with no manual configuration
+- Unified output of CPU, memory, swap, disk, network, process and OS details
 
 ## ⚙️ Custom Configuration
-### Change Server Port
+### Change Service Port
 Open `server.js` and modify the `PORT` constant:
 ```javascript
-const PORT = 23456; // Change to your desired port
+const PORT = 23456; // Replace with your desired port
 ```
 
-### Adjust Update Frequency
-Comments in the code clearly mark where to change intervals — if you can read Chinese, you’ll figure it out 😉
+### Adjust Push Interval
+Comments are clearly written in the source code. You can easily find and modify the corresponding parameters.
 
-## 📝 API Reference
+## 📝 API Documentation
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | Serve the monitoring dashboard |
-| `/api/ping` | POST | Latency test endpoint, measures round-trip time |
-| `/sse/time` | GET | SSE stream for real-time server time |
-| `/sse/system` | GET | SSE stream for real-time system monitoring data |
+| `/` | GET | Return frontend monitoring page |
+| `/api/ping` | POST | Latency test interface for network calculation |
+| `/sse/time` | GET | SSE real-time time stream |
+| `/sse/system` | GET | SSE system monitoring data stream |
 
 ## 🛡️ Security & Stability
-- All system commands wrapped in error handling to prevent crashes
-- Timers cleaned up automatically on client disconnect to avoid memory leaks
-- Frontend auto-reconnects if SSE drops
-- Read-only system access — no writes, safe for production use
+- Full exception catching for all system operations to prevent service crashes
+- Timers are automatically cleared on client disconnect to avoid memory leaks
+- Frontend SSE auto-reconnection ensures continuous monitoring
+- Read-only system information access, no write operations, completely safe
 
-## 📌 Use Cases
-- Personal Linux server real-time monitoring
-- Small-scale service status visualization
-- Teaching demo: SSE real-time communication & Node.js system operations
-- Lightweight alternative to heavy monitoring suites
-
-### ⚠️ Notes
-- **Linux only**: Windows/macOS cannot read `/proc` files and will show incorrect data.
+### ⚠️ Notice
+- Network speed may show `0` on the first sampling; it will work normally from the second round.
 
 ## 📄 License
-This project is open source under the **MIT License**. You are free to use, modify, copy, and distribute it.
+This project is open-sourced under the **MIT License**.
+Free to use, modify, copy and distribute.

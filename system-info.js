@@ -1,255 +1,305 @@
-// 引入依赖模块
-const fs = require('fs').promises;   // 文件系统（用于读取 /proc 下的系统文件）
-const os = require('os');            // Node 内置操作系统模块（获取基础系统信息）
-const { exec } = require('child_process'); // 执行 Linux 命令（如 df -h 查看磁盘）
+const os = require('os');
+// 引入第三方库systeminformation：专业获取硬件/系统详细信息
+const si = require('systeminformation');
 
-// 全局缓存变量（用于计算差值）
-let lastCpuStats = null;  // 保存上一次 CPU 数据（计算使用率）
-let lastNetStats = null;  // 保存上一次网卡数据（计算实时网速）
+// 全局缓存变量：存储上一次获取的网卡数据
+// 作用：在部分系统上，通过【本次数据 - 上次数据】的差值，计算实时网速
+let lastNetStats = null;
 
 /**
- * 工具函数：安全读取 Linux /proc 目录下的系统文件
- * 所有系统信息（CPU、内存、网络）都从这里读取
- * @param {string} path - 要读取的文件路径
- * @return {string} 文件内容（失败返回空字符串）
+ * 工具函数：安全转换为数字
+ * @param {any} value 任意类型的值
+ * @returns {number} 有效数字返回原值，无效值(NaN/undefined)返回0
  */
-async function readProc(path) {
-  try {
-    return await fs.readFile(path, 'utf8');
-  } catch (e) {
-    return '';
-  }
+function toNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
 }
 
 /**
- * 1. 获取 CPU 使用率 + 系统负载
- * 从 /proc/stat 读取原始数据，通过两次差值计算使用率
+ * 工具函数：格式化系统运行时间（秒 → 时:分）
+ * @param {number} seconds 运行总秒数
+ * @returns {string} 格式化后的字符串，如 2h 30m
+ */
+function formatUptime(seconds) {
+  // 确保数值非负，且转为整数
+  const safe = Math.max(0, Math.floor(toNumber(seconds)));
+  // 计算小时：总秒数 ÷ 3600（1小时=3600秒）
+  const hours = Math.floor(safe / 3600);
+  // 计算分钟：总秒数取模3600后 ÷ 60
+  const minutes = Math.floor((safe % 3600) / 60);
+  return `${hours}h ${minutes}m`;
+}
+
+/**
+ * 工具函数：格式化字节数（转为B/K/M/G/T/P易读单位）
+ * @param {number} bytes 字节数
+ * @returns {string} 格式化后的大小，如 2G、512M、100K
+ */
+function formatBytes(bytes) {
+  // 定义存储单位数组
+  const units = ['B', 'K', 'M', 'G', 'T', 'P'];
+  // 确保数值非负
+  let value = Math.max(0, toNumber(bytes));
+  let idx = 0;
+
+  // 循环除以1024，直到数值小于1024或到达最大单位
+  while (value >= 1024 && idx < units.length - 1) {
+    value /= 1024;
+    idx += 1;
+  }
+
+  // 格式化小数：数值≥10或单位是B时，保留0位小数；否则保留1位
+  const digits = value >= 10 || idx === 0 ? 0 : 1;
+  return `${value.toFixed(digits)}${units[idx]}`;
+}
+
+/**
+ * 1. 获取CPU信息
+ * 包含：CPU使用率、核心数、1/5/15分钟系统平均负载
+ * 兼容说明：Windows系统loadavg固定为0，Linux/macOS返回真实负载
+ * @returns {object} CPU信息对象
  */
 async function getCpu() {
-  const data = await readProc('/proc/stat');
-  // 按行拆分，取第一行（cpu 总信息）
-  const line = data.split('\n')[0].trim().split(/\s+/);
-
-  // 解析各个状态的 CPU 时间片
-  const user = +line[1];    // 用户态
-  const nice = +line[2];    // 低优先级用户态
-  const system = +line[3];  // 内核态
-  const idle = +line[4];    // 空闲
-
-  // 总时间片
-  const total = user + nice + system + idle;
-  // 繁忙时间片
-  const busy = total - idle;
-
-  let usage = 0;
-  // 和上一次数据对比，计算使用率
-  if (lastCpuStats) {
-    const dTotal = total - lastCpuStats.total;
-    const dBusy = busy - lastCpuStats.busy;
-    usage = dTotal > 0 ? +((dBusy / dTotal) * 100).toFixed(2) : 0;
+  try {
+    // 并行获取：CPU实时负载 + 系统平均负载
+    const [load, avg] = await Promise.all([
+      si.currentLoad(),  // 第三方库获取CPU使用率
+      Promise.resolve(os.loadavg())  // 原生模块获取系统负载
+    ]);
+    return {
+      usage: +toNumber(load.currentLoad).toFixed(2),       // CPU使用率（保留2位小数）
+      cores: os.cpus().length,                              // CPU物理核心数
+      load_1m: +toNumber(avg[0]).toFixed(2),                // 1分钟平均负载
+      load_5m: +toNumber(avg[1]).toFixed(2),                // 5分钟平均负载
+      load_15m: +toNumber(avg[2]).toFixed(2)                 // 15分钟平均负载
+    };
+  } catch (e) {
+    // 异常捕获：获取失败时返回默认值，避免程序崩溃
+    return {
+      usage: 0,
+      cores: os.cpus().length,
+      load_1m: 0,
+      load_5m: 0,
+      load_15m: 0
+    };
   }
-
-  // 更新缓存
-  lastCpuStats = { total, busy };
-
-  // 获取系统 1/5/15 分钟负载
-  const load = os.loadavg();
-
-  return {
-    usage,                // CPU 使用率
-    cores: os.cpus().length, // 核心数
-    load_1m: +load[0].toFixed(2),
-    load_5m: +load[1].toFixed(2),
-    load_15m: +load[2].toFixed(2)
-  };
 }
 
 /**
- * 2. 获取内存 + Swap 分区信息
- * 从 /proc/meminfo 读取
+ * 2. 获取内存 + 交换分区(Swap)信息
+ * @returns {object} 内存/Swap的总大小、已用大小、使用率
  */
 async function getMemory() {
-  const data = await readProc('/proc/meminfo');
-  const map = {};
+  try {
+    const m = await si.mem(); // 获取内存原始数据
+    const total = toNumber(m.total);                // 总物理内存
+    const used = Math.max(0, total - toNumber(m.available)); // 已用内存 = 总内存 - 可用内存
+    const swapTotal = toNumber(m.swaptotal);        // 总Swap分区
+    const swapUsed = toNumber(m.swapused);          // 已用Swap分区
 
-  // 按行解析，把 key:value 存入对象
-  data.split('\n').forEach(line => {
-    const [k, v] = line.split(':').map(i => i?.trim());
-    if (!k || !v) return;
-    map[k] = parseInt(v.replace(/\D/g, '')) || 0;
-  });
+    return {
+      // 内存信息（单位：GB，保留2位小数）
+      total_gb: +(total / 1024 / 1024 / 1024).toFixed(2),
+      used_gb: +(used / 1024 / 1024 / 1024).toFixed(2),
+      usage_percent: total ? +((used / total) * 100).toFixed(2) : 0,  // 内存使用率
 
-  // 计算总内存、已用内存
-  const total = map.MemTotal;
-  const free = map.MemFree + map.Buffers + map.Cached;
-  const used = total - free;
-
-  // Swap 分区
-  const swapTotal = map.SwapTotal;
-  const swapFree = map.SwapFree;
-  const swapUsed = swapTotal - swapFree;
-
-  return {
-    total_gb: +(total / 1024 / 1024).toFixed(2),
-    used_gb: +(used / 1024 / 1024).toFixed(2),
-    usage_percent: +((used / total) * 100).toFixed(2),
-
-    swap_total_gb: +(swapTotal / 1024 / 1024).toFixed(2),
-    swap_used_gb: +(swapUsed / 1024 / 1024).toFixed(2),
-    swap_percent: swapTotal ? +((swapUsed / swapTotal) * 100).toFixed(2) : 0
-  };
+      // Swap分区信息（单位：GB，保留2位小数）
+      swap_total_gb: +(swapTotal / 1024 / 1024 / 1024).toFixed(2),
+      swap_used_gb: +(swapUsed / 1024 / 1024 / 1024).toFixed(2),
+      swap_percent: swapTotal ? +((swapUsed / swapTotal) * 100).toFixed(2) : 0  // Swap使用率
+    };
+  } catch (e) {
+    // 异常兜底
+    return {
+      total_gb: 0,
+      used_gb: 0,
+      usage_percent: 0,
+      swap_total_gb: 0,
+      swap_used_gb: 0,
+      swap_percent: 0
+    };
+  }
 }
 
 /**
- * 3. 获取磁盘使用情况（挂载点、容量、使用率）
- * 执行 Linux 命令 df -h
+ * 3. 获取磁盘分区使用情况
+ * @returns {array} 所有有效磁盘分区的信息数组（过滤空分区）
  */
-function getDisk() {
-  return new Promise(resolve => {
-    exec('df -h --output=source,size,used,avail,pcent,target | grep "^/dev/"', (err, out) => {
-      if (err || !out) return resolve([]);
-
-      // 解析命令输出，转为数组对象
-      const list = out.trim().split('\n').map(line => {
-        const parts = line.trim().split(/\s+/);
+async function getDisk() {
+  try {
+    const fsList = await si.fsSize(); // 获取所有磁盘分区信息
+    return fsList
+      .filter(item => toNumber(item.size) > 0) // 过滤：只保留容量>0的有效分区
+      .map(item => {
+        const size = toNumber(item.size);     // 分区总大小
+        const used = toNumber(item.used);     // 已用大小
+        const avail = Math.max(0, size - used); // 可用大小
         return {
-          dev: parts[0],
-          size: parts[1],
-          used: parts[2],
-          avail: parts[3],
-          pcent: parts[4],
-          mount: parts[5]
+          dev: item.fs || item.type || '-',      // 设备名/文件系统类型
+          size: formatBytes(size),               // 总大小（格式化）
+          used: formatBytes(used),               // 已用大小（格式化）
+          avail: formatBytes(avail),             // 可用大小（格式化）
+          pcent: `${toNumber(item.use).toFixed(1)}%`, // 使用率
+          mount: item.mount || item.fs || '-'    // 挂载点
         };
       });
-      resolve(list);
-    });
-  });
+  } catch (e) {
+    return []; // 异常返回空数组
+  }
 }
 
 /**
- * 4. 获取网络信息
+ * 4. 获取网络信息（核心：实时网速计算）
  * 包含：网卡名、总接收/发送字节数、实时上下行速度
+ * 逻辑：优先用库自带网速，无数据时用【两次数据差值】计算
+ * @returns {array} 网卡信息数组
  */
 async function getNetwork() {
-  const data = await readProc('/proc/net/dev');
-  const now = Date.now();
-  const currentList = [];
+  try {
+    const now = Date.now(); // 当前时间戳（用于计算时间差）
+    const raw = await si.networkStats(); // 获取所有网卡原始数据
 
-  if (!data) return [];
-
-  // 遍历所有网卡（跳过前两行标题，跳过 lo 回环网卡）
-  data.trim().split('\n').slice(2).forEach(line => {
-    const p = line.trim().split(/\s+/);
-    const name = p[0].replace(':', '');
-    if (name === 'lo') return;
-
-    // 读取总流量（字节）
-    const rx_bytes = +p[1];  // 总接收
-    const tx_bytes = +p[9]; // 总发送
-
-    currentList.push({
-      interface: name,
-      rx_bytes,
-      tx_bytes,
+    // 过滤：排除回环网卡(lo/loopback)，只保留物理网卡
+    const filtered = raw.filter(item => {
+      const name = (item.iface || '').toLowerCase();
+      return name && !name.startsWith('lo') && !name.includes('loopback');
     });
-  });
 
-  // 计算实时网速（两次差值 / 时间差）
-  const result = [];
-  if (lastNetStats) {
-    const deltaTime = (now - lastNetStats.time) / 1000;
-    currentList.forEach(net => {
-      const old = lastNetStats.list.find(n => n.interface === net.interface);
-      if (!old) return;
+    // 有过滤后的物理网卡就用，没有就用原始数据
+    const source = filtered.length ? filtered : raw;
+    // 格式化网卡基础数据
+    const currentList = source.map(item => ({
+      interface: item.iface || '-',        // 网卡名称
+      rx_bytes: toNumber(item.rx_bytes),   // 总接收字节数
+      tx_bytes: toNumber(item.tx_bytes),   // 总发送字节数
+      rx_sec: toNumber(item.rx_sec),       // 库自带的实时下载速度
+      tx_sec: toNumber(item.tx_sec)        // 库自带的实时上传速度
+    }));
 
-      const rx_speed = Math.max(0, (net.rx_bytes - old.rx_bytes) / deltaTime);
-      const tx_speed = Math.max(0, (net.tx_bytes - old.tx_bytes) / deltaTime);
+    // 无网卡数据，直接返回空
+    if (!currentList.length) {
+      return [];
+    }
 
-      result.push({ ...net, rx_speed: Math.floor(rx_speed), tx_speed: Math.floor(tx_speed) });
+    // 计算时间差：本次与上次获取数据的间隔（秒）
+    const deltaTime = lastNetStats ? (now - lastNetStats.time) / 1000 : 0;
+    // 计算最终网速数据
+    const result = currentList.map(net => {
+      let rxSpeed = net.rx_sec;
+      let txSpeed = net.tx_sec;
+
+      // 兼容逻辑：如果库没有返回实时速度，则用【差值法】计算
+      if ((!rxSpeed && !txSpeed) && lastNetStats && deltaTime > 0) {
+        // 从缓存中获取上一次该网卡的数据
+        const old = lastNetStats.map.get(net.interface);
+        if (old) {
+          // 实时速度 = (本次总流量 - 上次总流量) / 时间差
+          rxSpeed = Math.max(0, (net.rx_bytes - old.rx_bytes) / deltaTime);
+          txSpeed = Math.max(0, (net.tx_bytes - old.tx_bytes) / deltaTime);
+        }
+      }
+
+      return {
+        interface: net.interface,
+        rx_bytes: net.rx_bytes,    // 总接收流量
+        tx_bytes: net.tx_bytes,    // 总发送流量
+        rx_speed: Math.floor(Math.max(0, rxSpeed || 0)), // 实时下载速度（向下取整）
+        tx_speed: Math.floor(Math.max(0, txSpeed || 0))  // 实时上传速度（向下取整）
+      };
     });
+
+    // 更新缓存：保存本次数据和时间，用于下一次计算网速
+    lastNetStats = {
+      time: now,
+      map: new Map(currentList.map(item => [item.interface, item]))
+    };
+
+    return result;
+  } catch (e) {
+    return []; // 异常返回空数组
   }
-
-  // 更新缓存
-  lastNetStats = { time: now, list: currentList };
-
-  // 第一次运行返回 0 速度
-  return result.length ? result : currentList.map(i => ({ ...i, rx_speed: 0, tx_speed: 0 }));
 }
 
 /**
- * 5. 获取当前系统进程总数
- * 读取 /proc 下所有数字命名的目录
+ * 5. 获取系统当前总进程数
+ * @returns {number} 进程总数（失败返回0）
  */
 async function getProcessCount() {
   try {
-    const files = await fs.readdir('/proc');
-    const pids = files.filter(f => /^\d+$/.test(f)); // 过滤 PID 目录
-    return pids.length;
+    const processes = await si.processes();
+    return toNumber(processes.all);
   } catch (e) {
     return 0;
   }
 }
 
 /**
- * 6. 获取系统发行版信息
- * 读取 /etc/os-release
+ * 6. 获取系统发行版信息（如 Ubuntu 22.04、Windows 11）
+ * @returns {string} 系统版本字符串
  */
 async function getOsRelease() {
   try {
-    const data = await readProc('/etc/os-release');
-    const name = data.match(/PRETTY_NAME="(.+)"/)?.[1] || 'Linux';
-    return name;
+    const info = await si.osInfo();
+    // 优先返回 发行版+版本号，否则返回发行版/平台名
+    return info.distro && info.release
+      ? `${info.distro} ${info.release}`
+      : info.distro || os.platform();
   } catch (e) {
-    return 'Linux';
+    return os.platform(); // 异常兜底：返回平台名（win32/linux/darwin）
   }
 }
 
 /**
- * 7. 获取系统基础信息
- * 主机名、内核版本、运行时间、架构
+ * 7. 获取系统基础信息（同步函数）
+ * 包含：主机名、内核版本、运行时间、系统架构
+ * @returns {object} 系统基础信息
  */
 function getSystem() {
+  const uptime = os.uptime(); // 系统运行总秒数
   return {
-    hostname: os.hostname(),            // 主机名
-    kernel: os.release(),               // 内核版本
-    uptime: os.uptime(),                // 开机秒数
-    uptime_human: `${Math.floor(os.uptime() / 3600)}h ${Math.floor((os.uptime() % 3600) / 60)}m`,
-    arch: os.arch(),                    // 系统架构
-    platform: os.platform()             // 平台
+    hostname: os.hostname(),       // 主机名
+    kernel: os.release(),          // 内核版本
+    uptime: uptime,                // 运行秒数（原始值）
+    uptime_human: formatUptime(uptime), // 格式化运行时间
+    arch: os.arch(),               // 系统架构（x64/arm64）
+    platform: os.platform()        // 系统平台（win32/linux/darwin）
   };
 }
 
 /**
- * 最终汇总：把所有信息打包成一个对象返回
- * 给后端 server.js 调用，通过 SSE 推送给前端
+ * 最终汇总函数：并行获取所有系统信息
+ * 用Promise.all并行请求，提升执行效率
+ * 给后端server.js调用，通过SSE推送给前端展示
+ * @returns {object} 完整的系统监控信息
  */
 async function getSystemInfo() {
-  // 并行获取所有信息（速度更快）
-  const [cpu, memory, disk, network, system, process_count, os_release] = await Promise.all([
+  // 并行获取所有硬件/系统信息（异步操作同时执行）
+  const [cpu, memory, disk, network, process_count, os_release] = await Promise.all([
     getCpu(),
     getMemory(),
     getDisk(),
     getNetwork(),
-    getSystem(),
     getProcessCount(),
     getOsRelease()
   ]);
 
+  // 打包成最终数据结构
   return {
-    cpu,
-    memory,
-    disk,
-    network,
-    system,
-    process_count,
-    os_release
+    cpu,            // CPU信息
+    memory,         // 内存信息
+    disk,           // 磁盘信息
+    network,        // 网络信息
+    system: getSystem(), // 系统基础信息
+    process_count,  // 进程总数
+    os_release      // 系统版本
   };
 }
 
-// 导出给 server.js 使用
+// 导出核心函数，供server.js调用
 module.exports = { getSystemInfo };
 
-// 直接运行此文件时，打印系统信息（方便调试）
+// 调试入口：直接运行此文件时，自动打印格式化的系统信息
 if (require.main === module) {
   getSystemInfo().then(info => {
     console.log(JSON.stringify(info, null, 2));
