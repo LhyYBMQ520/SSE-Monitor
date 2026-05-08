@@ -6,6 +6,11 @@ const si = require('systeminformation');
 // 作用：在部分系统上，通过【本次数据 - 上次数据】的差值，计算实时网速
 let lastNetStats = null;
 
+// 系统信息结果缓存，避免短时间内重复调用 systeminformation 的昂贵函数
+let _cache = null;
+let _cacheTime = 0;
+const CACHE_TTL = 1000; // 缓存有效期 1 秒
+
 /**
  * 工具函数：安全转换为数字
  * @param {any} value 任意类型的值
@@ -274,6 +279,11 @@ function getSystem() {
  * @returns {object} 完整的系统监控信息
  */
 async function getSystemInfo() {
+  // 有有效缓存时直接返回，避免短时间内重复调用昂贵的系统API
+  if (_cache && Date.now() - _cacheTime < CACHE_TTL) {
+    return _cache;
+  }
+
   // 并行获取所有硬件/系统信息（异步操作同时执行）
   const [cpu, memory, disk, network, process_count, os_release] = await Promise.all([
     getCpu(),
@@ -285,7 +295,7 @@ async function getSystemInfo() {
   ]);
 
   // 打包成最终数据结构
-  return {
+  _cache = {
     cpu,            // CPU信息
     memory,         // 内存信息
     disk,           // 磁盘信息
@@ -294,6 +304,8 @@ async function getSystemInfo() {
     process_count,  // 进程总数
     os_release      // 系统版本
   };
+  _cacheTime = Date.now();
+  return _cache;
 }
 
 // 导出核心函数，供server.js调用

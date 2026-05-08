@@ -32,24 +32,27 @@ app.get('/sse/time', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders(); // 立即发送响应头，建立连接
 
-  // 定时器：每隔 500 毫秒，向前端推送一次时间
-  const timer = setInterval(() => {
-    // 构造要推送的数据
+  let running = true;
+
+  function push() {
+    if (!running) return;
     const data = JSON.stringify({
       serverTime: new Date().toISOString()
     });
-    // SSE 格式固定：data: 内容\n\n
     res.write(`data: ${data}\n\n`);
-  }, 500);
+    if (running) setTimeout(push, 1000);
+  }
+
+  push();
 
   // 前端关闭页面 / 断开连接时，清除定时器，避免内存泄漏
   req.on('close', () => {
-    clearInterval(timer);
+    running = false;
   });
 });
 
 // 路由4：SSE 系统监控实时推送 /sse/system
-// 作用：每秒推送 CPU、内存、磁盘、网络、进程数、系统版本等数据
+// 作用：每2秒推送 CPU、内存、磁盘、网络、进程数、系统版本等数据
 app.get('/sse/system', async (req, res) => {
   // SSE 固定响应头
   res.setHeader('Content-Type', 'text/event-stream');
@@ -57,22 +60,25 @@ app.get('/sse/system', async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  // 每500毫秒获取一次系统信息并推送给前端
-  const timer = setInterval(async () => {
+  let running = true;
+
+  // 使用递归 setTimeout 替代 setInterval，防止重叠调用阻塞事件循环
+  async function push() {
+    if (!running) return;
     try {
-      // 调用 system-info.js 里的方法，获取所有系统数据
       const info = await getSystemInfo();
-      // 推送给前端
       res.write(`data: ${JSON.stringify(info)}\n\n`);
     } catch (err) {
-      // 捕获错误，防止服务器崩溃
       console.error('系统信息推送失败:', err);
     }
-  }, 500);
+    if (running) setTimeout(push, 2000);
+  }
 
-  // 客户端断开连接时清理定时器
+  push();
+
+  // 客户端断开连接时停止推送
   req.on('close', () => {
-    clearInterval(timer);
+    running = false;
   });
 });
 
