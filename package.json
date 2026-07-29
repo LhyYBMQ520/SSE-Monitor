@@ -1,14 +1,17 @@
 {
   "name": "sse-monitor",
   "version": "1.0.0",
-  "description": "",
+  "description": "Lightweight responsive system monitor powered by Server-Sent Events",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "LhyYBMQ520",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "express": "^5.2.1",
     "systeminformation": "^5.31.5"

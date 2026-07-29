@@ -1,89 +1,178 @@
-const express = require('express'); // 后端 Web 框架，用来快速写接口、静态服务
-const http = require('http');       // Node.js 内置 HTTP 模块，用于创建服务器
-const { getSystemInfo } = require('./system-info'); // 引入我们写的系统信息采集工具
+const express = require('express');
+const http = require('http');
+const path = require('path');
+const { getSystemInfo } = require('./system-info');
 
-// 创建 Express 实例 + HTTP 服务器
-const app = express();             // 创建 Express 应用
-const server = http.createServer(app); // 用 HTTP 服务包裹 Express（方便 SSE 长连接）
+const app = express();
+const server = http.createServer(app);
+const INDEX_FILE = path.join(__dirname, 'index.html');
+const FONT_ASSET_DIR = path.join(__dirname, 'fontawesome-free-7.2.0-web');
+const TIME_INTERVAL_MS = 1000;
+const SYSTEM_INTERVAL_MS = 2000;
 
-// 配置中间件
-app.use(express.json()); // 允许后端解析 JSON 格式的请求体
-app.use(express.static(__dirname)); // 把当前文件夹设为静态目录 → 可以直接访问 index.html
+// 避免小响应触发 Nagle 等待，并让 3 秒一次的延迟探测复用 TCP 连接。
+server.on('connection', socket => socket.setNoDelay(true));
+server.keepAliveTimeout = 15000;
+server.headersTimeout = 16000;
 
-// 路由1：访问网站根目录 /
-// 作用：打开浏览器时，返回前端页面 index.html
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/index.html');
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  next();
 });
 
-// 路由2：Ping 测试接口 /api/ping
-// 作用：前端用来测试延迟，后端立刻返回 { pong: true }
-// 前端通过计算请求耗时 = 真实网络延迟
+// 仅公开页面需要的图标资源，避免将服务端源码和项目配置暴露为静态文件。
+app.use('/fontawesome-free-7.2.0-web', express.static(FONT_ASSET_DIR, {
+  dotfiles: 'deny',
+  etag: true,
+  immutable: true,
+  maxAge: '30d'
+}));
+
+app.get('/', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(INDEX_FILE);
+});
+
+app.head('/api/ping', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(204).end();
+});
+
+// 保留旧版 POST 调用兼容性。
 app.post('/api/ping', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   res.json({ pong: true });
 });
 
-// 路由3：SSE 时钟推送 /sse/time
-// 作用：建立长连接，每秒向前端推送服务器当前时间
-app.get('/sse/time', (req, res) => {
-  // SSE 必须设置这三个响应头，告诉浏览器这是长连接流
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders(); // 立即发送响应头，建立连接
+const timeClients = new Set();
+const systemClients = new Set();
+let timeTimer = null;
+let systemTimer = null;
+let systemCollecting = false;
 
-  let running = true;
-
-  function push() {
-    if (!running) return;
-    const data = JSON.stringify({
-      serverTime: new Date().toISOString()
-    });
-    res.write(`data: ${data}\n\n`);
-    if (running) setTimeout(push, 1000);
+function writeSse(res, data) {
+  if (res.destroyed || res.writableEnded) return false;
+  try {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    return true;
+  } catch {
+    return false;
   }
+}
 
-  push();
-
-  // 前端关闭页面 / 断开连接时，清除定时器，避免内存泄漏
-  req.on('close', () => {
-    running = false;
+function initializeSse(req, res, clients, onRemove) {
+  res.status(200).set({
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no'
   });
-});
-
-// 路由4：SSE 系统监控实时推送 /sse/system
-// 作用：每2秒推送 CPU、内存、磁盘、网络、进程数、系统版本等数据
-app.get('/sse/system', async (req, res) => {
-  // SSE 固定响应头
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
+  res.write('retry: 3000\n\n');
+  clients.add(res);
 
-  let running = true;
+  let removed = false;
+  const removeClient = () => {
+    if (removed) return;
+    removed = true;
+    clients.delete(res);
+    onRemove();
+  };
 
-  // 使用递归 setTimeout 替代 setInterval，防止重叠调用阻塞事件循环
-  async function push() {
-    if (!running) return;
-    try {
-      const info = await getSystemInfo();
-      res.write(`data: ${JSON.stringify(info)}\n\n`);
-    } catch (err) {
-      console.error('系统信息推送失败:', err);
+  req.once('close', removeClient);
+  res.once('close', removeClient);
+  res.once('error', removeClient);
+}
+
+function stopTimeBroadcastIfIdle() {
+  if (timeClients.size || !timeTimer) return;
+  clearInterval(timeTimer);
+  timeTimer = null;
+}
+
+function broadcastTime() {
+  const payload = { serverTime: new Date().toISOString() };
+  for (const client of timeClients) {
+    if (!writeSse(client, payload)) timeClients.delete(client);
+  }
+  stopTimeBroadcastIfIdle();
+}
+
+function startTimeBroadcast() {
+  if (timeTimer) return;
+  broadcastTime();
+  timeTimer = setInterval(broadcastTime, TIME_INTERVAL_MS);
+}
+
+async function broadcastSystem() {
+  if (!systemClients.size || systemCollecting) return;
+  systemTimer = null;
+  systemCollecting = true;
+
+  try {
+    const info = await getSystemInfo();
+    for (const client of systemClients) {
+      if (!writeSse(client, info)) systemClients.delete(client);
     }
-    if (running) setTimeout(push, 2000);
+  } catch (err) {
+    console.error('系统信息推送失败:', err);
+  } finally {
+    systemCollecting = false;
+    if (systemClients.size) {
+      systemTimer = setTimeout(broadcastSystem, SYSTEM_INTERVAL_MS);
+    }
+  }
+}
+
+function stopSystemBroadcastIfIdle() {
+  if (systemClients.size || !systemTimer) return;
+  clearTimeout(systemTimer);
+  systemTimer = null;
+}
+
+app.get('/sse/time', (req, res) => {
+  initializeSse(req, res, timeClients, stopTimeBroadcastIfIdle);
+  startTimeBroadcast();
+});
+
+app.get('/sse/system', (req, res) => {
+  initializeSse(req, res, systemClients, stopSystemBroadcastIfIdle);
+  if (!systemTimer && !systemCollecting) broadcastSystem();
+});
+
+function parsePort(value) {
+  const port = Number.parseInt(value, 10);
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? port : 23456;
+}
+
+const PORT = parsePort(process.env.PORT);
+const HOST = process.env.HOST || '0.0.0.0';
+let shuttingDown = false;
+
+server.listen(PORT, HOST, () => {
+  console.log(`服务器已启动：http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+});
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`收到 ${signal}，正在关闭服务器...`);
+  if (timeTimer) clearInterval(timeTimer);
+  if (systemTimer) clearTimeout(systemTimer);
+
+  for (const client of [...timeClients, ...systemClients]) {
+    if (!client.writableEnded) client.end();
   }
 
-  push();
-
-  // 客户端断开连接时停止推送
-  req.on('close', () => {
-    running = false;
+  server.close(err => {
+    if (err) {
+      console.error('服务器关闭失败:', err);
+      process.exitCode = 1;
+    }
   });
-});
+}
 
-// 启动服务器，监听端口 23456
-const PORT = 23456;
-server.listen(PORT, () => {
-  console.log(`✅ 服务器已启动：http://localhost:${PORT}`);
-});
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));

@@ -3,6 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SSE 实时监控</title>
   <!-- 引入 Font Awesome 图标库 -->
   <link rel="stylesheet" type="text/css" href="fontawesome-free-7.2.0-web/css/all.min.css">
@@ -15,97 +16,157 @@
       font-family: Arial, sans-serif;
     }
 
+    :root {
+      color-scheme: light;
+      --surface: #ffffff;
+      --surface-muted: #f4f6f8;
+      --border: #dfe3e8;
+      --text: #1f2933;
+      --text-muted: #616e7c;
+      --accent: #1769aa;
+      --success-bg: #e8f5e9;
+      --success-text: #216e39;
+      --danger-bg: #ffebee;
+      --danger-text: #b42318;
+    }
+
+    html {
+      background: #eef1f4;
+    }
+
     /* 页面整体背景与内边距 */
     body {
-      padding: 40px;
-      background: #f5f5f5;
+      min-width: 0;
+      min-height: 100vh;
+      padding: 32px;
+      background: #eef1f4;
+      color: var(--text);
     }
 
-    /* 主容器：居中、白色背景、圆角、阴影 */
+    /* 主容器 */
     .container {
-      max-width: 700px;
+      max-width: 1080px;
       margin: 0 auto;
-      background: white;
-      padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
 
-    /* 标题居中 */
-    h1 {
+    /* 页面标题与延迟摘要 */
+    .page-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 24px;
       text-align: center;
-      margin-bottom: 30px;
-      color: #333;
+    }
+
+    h1 {
+      color: var(--text);
+      font-size: 28px;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow-wrap: anywhere;
+    }
+
+    h1 i {
+      color: var(--accent);
+      margin-right: 8px;
+    }
+
+    .header-delay {
+      color: var(--text-muted);
+      font-size: 12px;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .header-delay .delay {
+      color: var(--danger-text);
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    /* 时间摘要 */
+    .time-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
     }
 
     /* 时间展示框样式 */
     .time-box {
-      margin: 20px 0;
-      padding: 15px;
+      min-width: 0;
+      padding: 16px;
       border-radius: 8px;
-      background: #f8f9fa;
+      border: 1px solid var(--border);
+      background: var(--surface);
     }
 
     /* 标签文字样式（灰色小字） */
     .label {
       font-size: 14px;
-      color: #666;
+      color: var(--text-muted);
       margin-bottom: 8px;
     }
 
     /* 时间数值样式（大号加粗） */
     .time {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: bold;
-      color: #222;
-    }
-
-    /* 延迟数值样式（红色加粗） */
-    .delay {
-      font-size: 18px;
-      color: #d32f2f;
-      font-weight: bold;
+      color: var(--text);
+      line-height: 1.35;
+      overflow-wrap: anywhere;
     }
 
     /* 连接状态条样式 */
     .status {
-      margin-top: 20px;
-      padding: 10px;
+      margin-top: 16px;
+      min-height: 44px;
+      padding: 12px 16px;
       border-radius: 6px;
       text-align: center;
+      line-height: 20px;
     }
 
     /* 已连接状态：绿色背景 */
     .connected {
-      background: #e8f5e9;
-      color: #2e7d32;
+      background: var(--success-bg);
+      color: var(--success-text);
     }
 
     /* 断开状态：红色背景 */
     .disconnected {
-      background: #ffebee;
-      color: #c62828;
+      background: var(--danger-bg);
+      color: var(--danger-text);
     }
 
-    /* 监控卡片网格布局：2列、间距12px */
+    /* 监控卡片网格布局 */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
-      margin: 24px 0;
+      margin-top: 16px;
     }
 
     /* 单个监控卡片样式 */
     .stat-card {
-      background: #f8f9fa;
+      min-width: 0;
+      min-height: 128px;
+      background: var(--surface);
+      border: 1px solid var(--border);
       padding: 16px;
-      border-radius: 10px;
+      border-radius: 8px;
+    }
+
+    .stat-card-wide {
+      grid-column: 1 / -1;
+      min-height: 0;
     }
 
     /* 卡片标题：小灰色文字 */
     .stat-title {
       font-size: 13px;
-      color: #666;
+      color: var(--text-muted);
       margin-bottom: 6px;
     }
 
@@ -113,16 +174,64 @@
     .stat-value {
       font-size: 20px;
       font-weight: bold;
-      color: #222;
+      color: var(--text);
+      line-height: 1.35;
+      overflow-wrap: anywhere;
     }
 
     /* 卡片子信息：小号文字、支持换行 */
     .stat-sub {
       font-size: 12px;
-      color: #555;
+      color: var(--text-muted);
       margin-top: 4px;
       line-height: 1.5;
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 800px) {
+      body {
+        padding: 24px;
+      }
+
+      .time-grid,
+      .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+    }
+
+    @media (max-width: 520px) {
+      body {
+        padding: 16px 12px calc(16px + env(safe-area-inset-bottom));
+      }
+
+      .page-header {
+        gap: 8px;
+        margin-bottom: 18px;
+      }
+
+      h1 {
+        font-size: 20px;
+      }
+
+      .time-grid,
+      .stats-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .stat-card-wide {
+        grid-column: auto;
+      }
+
+      .time,
+      .stat-value {
+        font-size: 18px;
+      }
+
+      .stat-card {
+        min-height: 0;
+      }
     }
   </style>
 </head>
@@ -130,24 +239,28 @@
 <body>
   <!-- 页面主容器 -->
   <div class="container">
-    <h1><i class="fa-solid fa-chart-line"></i> SSE 实时系统监控</h1>
+    <header class="page-header">
+      <h1><i class="fa-solid fa-chart-line"></i> SSE 实时系统监控</h1>
+      <div class="header-delay" aria-label="连接延迟">
+        <i class="fa-solid fa-stopwatch"></i>
+        <span>延迟</span>
+        <span id="delay" class="delay">-</span>
+      </div>
+    </header>
 
-    <!-- 后端系统时间展示模块 -->
-    <div class="time-box">
-      <div class="label"><i class="fa-solid fa-satellite-dish"></i> 后端系统时间</div>
-      <div id="serverTime" class="time">-</div>
-    </div>
+    <div class="time-grid">
+      <!-- 后端系统时间展示模块 -->
+      <div class="time-box">
+        <div class="label"><i class="fa-solid fa-satellite-dish"></i> 后端系统时间</div>
+        <div id="serverTime" class="time">-</div>
+      </div>
 
-    <!-- 前端本地时间展示模块 -->
-    <div class="time-box">
-      <div class="label"><i class="fa-solid fa-laptop"></i> 前端本地时间</div>
-      <div id="clientTime" class="time">-</div>
-    </div>
+      <!-- 前端本地时间展示模块 -->
+      <div class="time-box">
+        <div class="label"><i class="fa-solid fa-laptop"></i> 前端本地时间</div>
+        <div id="clientTime" class="time">-</div>
+      </div>
 
-    <!-- 网络连接延迟展示模块 -->
-    <div class="time-box">
-      <div class="label"><i class="fa-solid fa-stopwatch"></i> 连接延迟</div>
-      <div id="delay" class="delay">-</div>
     </div>
 
     <!-- 监控数据网格布局 -->
@@ -195,16 +308,17 @@
       </div>
 
       <!-- 系统信息卡片 -->
-      <div class="stat-card">
+      <div class="stat-card stat-card-wide">
         <div class="stat-title"><i class="fa-solid fa-info-circle"></i> 系统信息</div>
         <div id="sysInfo" class="stat-value">-</div>
+        <div id="dataSource" class="stat-sub">数据来源：-</div>
         <div id="sysExtra" class="stat-sub">-</div>
       </div>
 
     </div>
 
     <!-- SSE 连接状态展示 -->
-    <div id="status" class="status disconnected"><i class="fa-solid fa-hourglass-half"></i> 等待连接...</div>
+    <div id="status" class="status disconnected" role="status" aria-live="polite"><i class="fa-solid fa-hourglass-half"></i> 等待连接...</div>
   </div>
 
   <script>
@@ -232,10 +346,36 @@
     const totalTrafficEl = document.getElementById('totalTraffic');// 总流量
 
     const sysInfoEl = document.getElementById('sysInfo');          // 主机名
+    const dataSourceEl = document.getElementById('dataSource');    // 数据采集来源
     const sysExtraEl = document.getElementById('sysExtra');        // 系统详细信息
 
+    const streamState = { time: false, system: false };
+
+    function updateConnectionStatus() {
+      const connectedCount = Object.values(streamState).filter(Boolean).length;
+      if (connectedCount === 2) {
+        statusEl.innerHTML = '<i class="fa-solid fa-check"></i> 实时监控已连接';
+        statusEl.className = 'status connected';
+        return;
+      }
+
+      const message = connectedCount === 0 ? '连接中...' : '部分数据重连中...';
+      statusEl.innerHTML = `<i class="fa-solid fa-rotate"></i> ${message}`;
+      statusEl.className = 'status disconnected';
+    }
+
+    function formatRate(bytes) {
+      const value = Number(bytes) || 0;
+      if (value >= 1048576) return `${(value / 1048576).toFixed(2)} MB/s`;
+      if (value >= 1024) return `${(value / 1024).toFixed(1)} KB/s`;
+      return `${Math.round(value)} B/s`;
+    }
+
+    function formatTotal(bytes) {
+      return `${((Number(bytes) || 0) / 1073741824).toFixed(2)}G`;
+    }
+
     // 功能1：实时更新前端本地时间
-    // 每隔 100ms 刷新一次
     function updateClientTime() {
       const now = new Date();
       clientTimeEl.textContent = now.toLocaleString('zh-CN', {
@@ -243,26 +383,68 @@
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
       });
     }
-    setInterval(updateClientTime, 100);
+    setInterval(updateClientTime, 1000);
     updateClientTime();
 
-    // 功能2：Ping 测试 - 计算服务器延迟
-    // 每隔 500ms 发送一次请求，计算耗时
-    async function pingServer() {
+    // 功能2：Ping 测试 - 使用短窗口中位数过滤偶发调度毛刺
+    const delaySamples = [];
+    let pingInFlight = false;
+
+    function getMedian(values) {
+      const sorted = [...values].sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2
+        ? sorted[middle]
+        : (sorted[middle - 1] + sorted[middle]) / 2;
+    }
+
+    async function measurePing() {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+      const start = performance.now();
+
       try {
-        const start = Date.now();
         const res = await fetch('/api/ping', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          method: 'HEAD',
+          cache: 'no-store',
+          signal: controller.signal
         });
         if (!res.ok) throw new Error();
-        delayEl.textContent = `${Date.now() - start} ms`;
-      } catch (e) {
-        delayEl.textContent = '未连接';
+        return performance.now() - start;
+      } finally {
+        clearTimeout(timeout);
       }
     }
-    setInterval(pingServer, 500);
+
+    async function pingServer() {
+      if (pingInFlight) return;
+      pingInFlight = true;
+
+      try {
+        const attempts = delaySamples.length ? 1 : 3;
+        for (let i = 0; i < attempts; i += 1) {
+          delaySamples.push(await measurePing());
+          if (delaySamples.length > 5) delaySamples.shift();
+        }
+        delayEl.textContent = `${Math.round(getMedian(delaySamples))} ms`;
+      } catch (e) {
+        delayEl.textContent = '未连接';
+      } finally {
+        pingInFlight = false;
+      }
+    }
+
+    let pingTimer = setInterval(pingServer, 3000);
     pingServer();
+
+    document.addEventListener('visibilitychange', () => {
+      clearInterval(pingTimer);
+      pingTimer = null;
+      if (!document.hidden) {
+        pingServer();
+        pingTimer = setInterval(pingServer, 3000);
+      }
+    });
 
     // 功能3：SSE 连接 - 接收后端实时时间
     // 建立长连接，接收服务器推送的时间
@@ -271,8 +453,8 @@
 
       // 连接成功时触发
       sse.onopen = () => {
-        statusEl.innerHTML = '<i class="fa-solid fa-check"></i> SSE 已连接';
-        statusEl.className = 'status connected';
+        streamState.time = true;
+        updateConnectionStatus();
       };
 
       // 接收到后端推送的时间时触发
@@ -287,20 +469,25 @@
         } catch (err) { }
       };
 
-      // 连接出错/断开时触发，自动重连
+      // EventSource 会按照服务端下发的 retry 间隔自动重连
       sse.onerror = () => {
-        statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> SSE 断开，重连中...';
-        statusEl.className = 'status disconnected';
-        sse.close();
-        setTimeout(connectSSE, 2000);
+        streamState.time = false;
+        updateConnectionStatus();
       };
+
+      return sse;
     }
-    connectSSE();
+    const timeSSE = connectSSE();
 
     // 功能4：SSE 连接 - 接收系统监控数据
     // 接收 CPU/内存/磁盘/网络/系统信息等实时数据
     function connectSystemSSE() {
       const sse = new EventSource('/sse/system');
+
+      sse.onopen = () => {
+        streamState.system = true;
+        updateConnectionStatus();
+      };
 
       // 接收到系统监控数据时更新页面
       sse.onmessage = (e) => {
@@ -327,39 +514,40 @@
 
           // === 网络速度展示 ===
           const net = data.network[0] || {};
-          let rxStr = '0 B/s';
-          let txStr = '0 B/s';
-          if (net.rx_speed !== undefined) {
-            rxStr = net.rx_speed > 1048576
-              ? (net.rx_speed / 1048576).toFixed(2) + ' MB/s'
-              : net.rx_speed > 1024
-                ? (net.rx_speed / 1024).toFixed(1) + ' KB/s'
-                : net.rx_speed + ' B/s';
-            txStr = net.tx_speed > 1048576
-              ? (net.tx_speed / 1048576).toFixed(2) + ' MB/s'
-              : net.tx_speed > 1024
-                ? (net.tx_speed / 1024).toFixed(1) + ' KB/s'
-                : net.tx_speed + ' B/s';
-          }
+          const rxStr = formatRate(net.rx_speed);
+          const txStr = formatRate(net.tx_speed);
           netUsageEl.textContent = `↓ ${rxStr} • ↑ ${txStr}`;
           netIfaceEl.textContent = net.interface || '-';
 
           // === 累计流量展示 ===
-          const rxTotalGB = (net.rx_bytes / 1024 / 1024 / 1024).toFixed(2);
-          const txTotalGB = (net.tx_bytes / 1024 / 1024 / 1024).toFixed(2);
-          totalTrafficEl.textContent = `↓ ${rxTotalGB}G • ↑ ${txTotalGB}G`;
+          totalTrafficEl.textContent = `↓ ${formatTotal(net.rx_bytes)} • ↑ ${formatTotal(net.tx_bytes)}`;
 
           // === 系统信息展示 ===
           sysInfoEl.textContent = data.system.hostname;
+          dataSourceEl.textContent = `数据来源：${data.data_source || '未知'}`;
           sysExtraEl.textContent =
             `${data.os_release} | ${data.system.arch}
 内核：${data.system.kernel}
 运行：${data.system.uptime_human} | 进程：${data.process_count}`;
 
-        } catch (err) { }
+        } catch (err) {
+          console.error('系统监控数据解析失败:', err);
+        }
       };
+
+      sse.onerror = () => {
+        streamState.system = false;
+        updateConnectionStatus();
+      };
+
+      return sse;
     }
-    connectSystemSSE();
+    const systemSSE = connectSystemSSE();
+
+    window.addEventListener('beforeunload', () => {
+      timeSSE.close();
+      systemSSE.close();
+    });
   </script>
 </body>
 

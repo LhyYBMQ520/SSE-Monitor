@@ -1,6 +1,8 @@
 const os = require('os');
 // 引入第三方库systeminformation：专业获取硬件/系统详细信息
-const si = require('systeminformation');
+const IS_LINUX = process.platform === 'linux';
+const si = IS_LINUX ? null : require('systeminformation');
+const { getLinuxSystemInfo } = IS_LINUX ? require('./linux-system-info') : {};
 
 // 全局缓存变量：存储上一次获取的网卡数据
 // 作用：在部分系统上，通过【本次数据 - 上次数据】的差值，计算实时网速
@@ -9,7 +11,9 @@ let lastNetStats = null;
 // 系统信息结果缓存，避免短时间内重复调用 systeminformation 的昂贵函数
 let _cache = null;
 let _cacheTime = 0;
+let _cachePromise = null;
 const CACHE_TTL = 1000; // 缓存有效期 1 秒
+let osReleasePromise = null;
 
 /**
  * 工具函数：安全转换为数字
@@ -244,15 +248,14 @@ async function getProcessCount() {
  * @returns {string} 系统版本字符串
  */
 async function getOsRelease() {
-  try {
-    const info = await si.osInfo();
-    // 优先返回 发行版+版本号，否则返回发行版/平台名
-    return info.distro && info.release
-      ? `${info.distro} ${info.release}`
-      : info.distro || os.platform();
-  } catch (e) {
-    return os.platform(); // 异常兜底：返回平台名（win32/linux/darwin）
+  if (!osReleasePromise) {
+    osReleasePromise = si.osInfo()
+      .then(info => (info.distro && info.release
+        ? `${info.distro} ${info.release}`
+        : info.distro || os.platform()))
+      .catch(() => os.platform());
   }
+  return osReleasePromise;
 }
 
 /**
@@ -284,7 +287,23 @@ async function getSystemInfo() {
     return _cache;
   }
 
-  // 并行获取所有硬件/系统信息（异步操作同时执行）
+  // 复用进行中的采集任务，避免多个请求同时触发重复的系统查询。
+  if (!_cachePromise) {
+    _cachePromise = collectSystemInfo().then(info => {
+      _cache = info;
+      _cacheTime = Date.now();
+      return _cache;
+    }).finally(() => {
+      _cachePromise = null;
+    });
+  }
+
+  return _cachePromise;
+}
+
+async function collectSystemInfo() {
+  if (IS_LINUX) return getLinuxSystemInfo();
+
   const [cpu, memory, disk, network, process_count, os_release] = await Promise.all([
     getCpu(),
     getMemory(),
@@ -293,19 +312,16 @@ async function getSystemInfo() {
     getProcessCount(),
     getOsRelease()
   ]);
-
-  // 打包成最终数据结构
-  _cache = {
-    cpu,            // CPU信息
-    memory,         // 内存信息
-    disk,           // 磁盘信息
-    network,        // 网络信息
-    system: getSystem(), // 系统基础信息
-    process_count,  // 进程总数
-    os_release      // 系统版本
+  return {
+    cpu,
+    memory,
+    disk,
+    network,
+    system: getSystem(),
+    process_count,
+    os_release,
+    data_source: 'systeminformation 跨平台库'
   };
-  _cacheTime = Date.now();
-  return _cache;
 }
 
 // 导出核心函数，供server.js调用
