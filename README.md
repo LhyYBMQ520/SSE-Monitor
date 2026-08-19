@@ -39,9 +39,10 @@
 - **网络延迟实时监测**：页面可见时每 3 秒通过轻量 HEAD 请求检测延迟，并以最近 5 次采样的中位数过滤偶发毛刺
 
 ## 🚀 快速开始
-### 1. 环境要求
+### 1. 源码运行环境要求
 - Windows / Linux / macOS（macOS 未测试）
 - Node.js 18+
+- pnpm
 
 ### 2. 安装运行
 ```bash
@@ -62,6 +63,27 @@ http://localhost:23456
 ```
 
 局域网内其他设备可通过 `http://服务器IP:23456` 访问。请确认操作系统防火墙已允许对应端口。
+
+### 4. 单文件二进制版本（Node SEA）
+
+项目可使用 Node.js Single Executable Applications（SEA）构建为单文件绿色版。二进制文件已内嵌服务端代码、监控页面和页面所需的 Font Awesome 资源，运行目标机器无需安装 Node.js、pnpm 或项目依赖。
+
+已构建的产物命名如下（请前往 Releases 页面下载）：
+
+| 平台 | 文件名 | 运行方式 |
+|------|--------|----------|
+| Windows x64 | `sse-monitor-win-x64.exe` | 双击运行，或在 PowerShell 中执行 `./sse-monitor-win-x64.exe` |
+| Linux x64（glibc） | `sse-monitor-linux-x64` | `chmod +x sse-monitor-linux-x64 && ./sse-monitor-linux-x64` |
+
+二进制与源码版本使用相同的 `HOST`、`PORT` 环境变量。例如部署至服务器并由反向代理访问时，可仅监听本机回环地址：
+
+```bash
+HOST=127.0.0.1 PORT=23456 ./sse-monitor-linux-x64
+```
+
+SEA 二进制必须在目标操作系统和 CPU 架构对应的平台上构建，Windows 产物不能在 Linux 上运行，反之亦然。当前 Linux x64 产物依赖 glibc，Alpine Linux 等基于 musl libc 的发行版不能保证直接运行。
+
+源码构建 SEA 时，需要使用支持 `node:sea` 的较新 Node.js 版本（v25.5.0+），并先执行 `pnpm install` 安装 `esbuild`。构建中间文件位于 `build/`，最终二进制位于 `release/`；两者均为本地生成文件，不纳入 Git。
 
 ## 🔧 核心技术说明
 ### 1. Server-Sent Events (SSE)

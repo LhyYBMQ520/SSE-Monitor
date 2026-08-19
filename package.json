@@ -15,5 +15,8 @@
   "dependencies": {
     "express": "^5.2.1",
     "systeminformation": "^5.31.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }
